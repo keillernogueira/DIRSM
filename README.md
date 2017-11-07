@@ -7,8 +7,8 @@ It allows fine-tuning of several ConvNets using TensorFlow framework.
 Among the networks, it includes:
 
   - [AlexNet](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks)
-  - [VGG16](https://arxiv.org/abs/1512.03385)
-  - [GoogleNet](https://arxiv.org/abs/1512.03385)
+  - [VGG16](https://arxiv.org/abs/1409.1556)
+  - [GoogleNet](https://arxiv.org/abs/1409.4842)
   - [ResNets(50,101,152)](https://arxiv.org/abs/1512.03385) with bootleneck
   - [DenseNets(121,169,201,161)](https://arxiv.org/abs/1608.06993) with bootleneck and compression
 
