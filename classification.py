@@ -18,6 +18,7 @@ from sklearn.model_selection import StratifiedKFold
 np.set_printoptions(threshold=np.inf)
 
 NUM_CLASSES = 2
+# TODO: trocar ordem pra RGB?
 IMAGENET_MEAN_BGR = [103.062623801, 115.902882574, 123.151630838, ]
 
 
@@ -155,7 +156,7 @@ def load_images(dataset_path, img_names, img_classes, resize_to=224, is_test=Fal
     for i in xrange(len(img_names) - 1, -1, -1):
         try:
             img = Image.open(dataset_path + img_names[i] + '.jpg')
-        except:
+        except IOError:
             print BatchColors.FAIL + "Error: Cannot find image " + dataset_path + img_names[i] + \
                   '.jpg' + BatchColors.ENDC
             del img_names[i]
@@ -186,8 +187,8 @@ def load_images(dataset_path, img_names, img_classes, resize_to=224, is_test=Fal
             classes.append(img_classes[i])
 
             # DATA AUGMENTATION
-            # data.append(np.fliplr(img_float))
-            # classes.append(img_classes[i])
+            data.append(np.fliplr(img_float))
+            classes.append(img_classes[i])
 
     data_arr = np.asarray(data)
     classes_arr = np.asarray(classes)
@@ -1304,7 +1305,7 @@ def add_dense_block(input_data, n_channels, growth_rate, drop_rate, is_training,
     return input_data, n_channels
 
 
-def densenet(x, is_training, weight_decay, input_image_size, reduction, drop_rate, growth_rate,
+def densenet(x, is_training, weight_decay, input_image_size, reduction, drop_rate, growth_rate, first_layer_num_neurons,
              num_blocks=[6, 12, 24, 16]):
     x = tf.reshape(x, shape=[-1, input_image_size, input_image_size, 3])  # 224x224x3
 
@@ -1314,10 +1315,9 @@ def densenet(x, is_training, weight_decay, input_image_size, reduction, drop_rat
     model:add(cudnn.ReLU(true))
     model:add(nn.SpatialMaxPooling(3, 3, 2, 2, 1, 1))
     '''
-    input_data = _conv_layer(x, kernel_shape=[7, 7, 3, 64], name='dense0', weight_decay=weight_decay,
-                             is_training=is_training,
-                             pad='SAME', activation='relu', strides=[1, 2, 2, 1], batch_norm=True, is_activated=True,
-                             has_bias=False)
+    input_data = _conv_layer(x, kernel_shape=[7, 7, 3, first_layer_num_neurons], name='dense0',
+                             weight_decay=weight_decay, is_training=is_training, pad='SAME', activation='relu',
+                             strides=[1, 2, 2, 1], batch_norm=True, is_activated=True, has_bias=False)
     input_data = maxpool2d(input_data, k=3, strides=2)
 
     # --Dense-Block 1 and transition (56x56)
@@ -1325,10 +1325,9 @@ def densenet(x, is_training, weight_decay, input_image_size, reduction, drop_rat
     # add_transition(model, n_channels, math.floor(n_channels*reduction), opt)
     # n_channels = math.floor(n_channels*reduction)
     with tf.variable_scope('dense1') as scope:
-        input_data, n_channels = add_dense_block(input_data, n_channels=64, growth_rate=growth_rate,
-                                                 drop_rate=drop_rate,
-                                                 is_training=is_training, weight_decay=weight_decay,
-                                                 num_blocks=num_blocks[0])
+        input_data, n_channels = add_dense_block(input_data, n_channels=first_layer_num_neurons,
+                                                 growth_rate=growth_rate, drop_rate=drop_rate, is_training=is_training,
+                                                 weight_decay=weight_decay, num_blocks=num_blocks[0])
         input_data = add_transition(input_data, n_channels, math.floor(n_channels * reduction), is_training,
                                     weight_decay, last=False,
                                     drop_rate=drop_rate, scope=scope)
@@ -1456,26 +1455,23 @@ def main_feature_extraction(batch_size, class_test, class_train, data_test, data
     all_features = feature_extraction(sess, data_test, class_test, n_input_data, batch_size, x, y, keep_prob,
                                       is_training, features)
     print BatchColors.OKGREEN + "Features extracted!" + BatchColors.ENDC
+
     assert len(all_features_train) == len(train_index)
     assert len(all_features) == len(test_index)
+
     feat_file = open(output_path + 'fold' + str(fold) + '/all_featuresTest_fold' + str(fold) + '.txt', 'w')
     # print all_features.shape
     # print all_features[0,:]
     for f in xrange(len(all_features)):
         feat_file.write(
-            names_test[f] + ' ' + np.array_str(all_features[f, :]).replace("\n", " ").replace("[",
-                                                                                              "").replace(
-                "]", "") + '\n')
+            names_test[f] + ' ' + np.array_str(all_features[f, :]).replace("\n", " ").replace("[", "").replace("]", "") + '\n')
     feat_file.close()
-    feat_file2 = open(output_path + 'fold' + str(fold) + '/all_features_train_fold' + str(fold) + '.txt',
-                      'w')
+    feat_file2 = open(output_path + 'fold' + str(fold) + '/all_features_train_fold' + str(fold) + '.txt', 'w')
     # print all_features_train.shape
     # print all_features_train[0,:]
     for f in xrange(len(all_features_train)):
         feat_file2.write(
-            names_train[f] + ' ' + np.array_str(all_features_train[f, :]).replace("\n", " ").replace("[",
-                                                                                                     "").replace(
-                "]", "") + '\n')
+            names_train[f] + ' ' + np.array_str(all_features_train[f, :]).replace("\n", " ").replace("[", "").replace("]", "") + '\n')
     feat_file2.close()
 
 
@@ -1511,7 +1507,7 @@ def generate_ranking(batch_size, class_test, data_test, is_training, keep_prob, 
                     resultFile.close()'''
     ''' TREC EVAL TEST '''
 
-    for k in [50, 100, 250, 480]:
+    for k in [50, 100, 200, 300, 400, 500]:
         # print "Calculating Average Precision@" + str(k)
         print apk(relevant, relevance_list_name, k=k)
         # print average_precision(relevance_list[:k])
@@ -1555,17 +1551,17 @@ def fold_ranking(sess, x, y, keep_prob, is_training, n_input_data, logits, batch
     for k in [50, 100, 250, 480]:
         print apk(relevant, relevance_list_name, k=k)
 
-    out_file = open(output_path + 'ME17MST_DIRSM_MultiBrasil_run4.1.txt', 'w')
+    '''out_file = open(output_path + 'ME17MST_DIRSM_MultiBrasil_run4.1.txt', 'w')
     for i in xrange(len(relevance_list_name)):
         out_file.write(relevance_list_name[i] + "\n")
-    out_file.close()
+    out_file.close()'''
 
     return all_logits
 
 
 '''
 python classification.py /home/mediaeval17/DIRSM/ /home/mediaeval17/DIRSM/folds_224/
-/home/mediaeval17/caffe-tensorflow/models/vgg16/vgg16.npy /home/mediaeval17/DIRSM/ 0.01 0.005 200 200000 vgg16
+/home/mediaeval17/caffe-tensorflow/models/vgg16/vgg16.npy /home/mediaeval17/DIRSM/ 0.01 0.005 200 200000 testing vgg16
 '''
 
 
@@ -1611,18 +1607,22 @@ def main():
     dynamic_norm = True
 
     # PROCESS IMAGES
+    # read train image names and classes
     img_names, img_classes = read_csv_file(dataset_path + 'devset_images_gt.csv')
     print len(img_names), len(img_classes)
+    # load train images: returns images, classes and names (delete img_names and img_classes to be associated)
     data, classes, names = load_images(dataset_path + 'devset_images/', img_names, img_classes,
                                        resize_to=input_image_size)
     img_names, img_classes = np.asarray(img_names), np.asarray(img_classes)
     print img_names.shape, img_classes.shape, data.shape, classes.shape, names.shape
 
     if 'testing' in process:
+        # read test image names and classes -- testset_images_gt with gt -- testset_images without gt
         test_img_names, test_img_classes = read_csv_file(dataset_path + 'test/testset_images_gt.csv',
                                                          is_test=False)
         # read_csv_file(dataset_path+'test/testset_images.csv', is_test=True)
         print len(test_img_names), len(test_img_classes)
+        # load test images: returns images, classes and names (delete img_names and img_classes to be associated)
         test_data, test_classes, names_testing = load_images(dataset_path + 'test/testset_images/', test_img_names,
                                                              test_img_classes, resize_to=input_image_size,
                                                              is_test=False)
@@ -1632,10 +1632,11 @@ def main():
 
     fold = 0
     # skf = StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
-    # for train_index, test_index in skf.split(data, classes):
+    # for index_train, index_validation in skf.split(data, classes):
     first = True
     for cur_fold in xrange(1, 6):
         fold += 1
+        print BatchColors.OKGREEN + "Fold " + str(fold) + BatchColors.ENDC
         # print folds_path+'fold'+str(fold)+'/trainData_fold'+str(fold)+'.npy'
         # print os.path.isfile(folds_path+'fold'+str(fold)+'/trainData_fold'+str(fold)+'.npy')
 
@@ -1643,28 +1644,28 @@ def main():
             # TRAIN
             # data_train = np.load(folds_path+'fold'+str(fold)+'/trainData_fold'+str(fold)+'.npy')
             # class_train = np.load(folds_path+'fold'+str(fold)+'/trainLabel_fold'+str(fold)+'.npy')
-            train_index = np.load(folds_path + 'fold' + str(fold) + '/trainIndex_fold' + str(fold) + '.npy')
+            index_train = np.load(folds_path + 'fold' + str(fold) + '/trainIndex_fold' + str(fold) + '.npy')
             # TEST
-            # data_test = np.load(folds_path+'fold'+str(fold)+'/testData_fold'+str(fold)+'.npy')
-            # class_test = np.load(folds_path+'fold'+str(fold)+'/testLabel_fold'+str(fold)+'.npy')
-            test_index = np.load(folds_path + 'fold' + str(fold) + '/testIndex_fold' + str(fold) + '.npy')
+            # data_validation = np.load(folds_path+'fold'+str(fold)+'/testData_fold'+str(fold)+'.npy')
+            # class_validation = np.load(folds_path+'fold'+str(fold)+'/testLabel_fold'+str(fold)+'.npy')
+            index_validation = np.load(folds_path + 'fold' + str(fold) + '/testIndex_fold' + str(fold) + '.npy')
             print BatchColors.OKGREEN + "Folds loaded!" + BatchColors.ENDC
         else:
             # TRAIN
             # np.save(folds_path+'fold'+str(fold)+'/trainData_fold'+str(fold)+'.npy', data_train)
             # np.save(folds_path+'fold'+str(fold)+'/trainNames_fold'+str(fold)+'.npy', names_train)
             # np.save(folds_path+'fold'+str(fold)+'/trainLabel_fold'+str(fold)+'.npy', class_train)
-            np.save(folds_path + 'fold' + str(fold) + '/trainIndex_fold' + str(fold) + '.npy', train_index)
+            np.save(folds_path + 'fold' + str(fold) + '/trainIndex_fold' + str(fold) + '.npy', index_train)
             # TEST
-            # np.save(folds_path+'fold'+str(fold)+'/testData_fold'+str(fold)+'.npy', data_test)
-            # np.save(folds_path+'fold'+str(fold)+'/testNames_fold'+str(fold)+'.npy', names_test)
-            # np.save(folds_path+'fold'+str(fold)+'/testLabel_fold'+str(fold)+'.npy', class_test)
-            np.save(folds_path + 'fold' + str(fold) + '/testIndex_fold' + str(fold) + '.npy', test_index)
+            # np.save(folds_path+'fold'+str(fold)+'/testData_fold'+str(fold)+'.npy', data_validation)
+            # np.save(folds_path+'fold'+str(fold)+'/testNames_fold'+str(fold)+'.npy', names_validation)
+            # np.save(folds_path+'fold'+str(fold)+'/testLabel_fold'+str(fold)+'.npy', class_validation)
+            np.save(folds_path + 'fold' + str(fold) + '/testIndex_fold' + str(fold) + '.npy', index_validation)
             print BatchColors.OKGREEN + "Folds saved!" + BatchColors.ENDC
 
-        data_train, data_test = data[train_index], data[test_index]
-        class_train, class_test = classes[train_index], classes[test_index]
-        names_train, names_test = img_names[train_index], img_names[test_index]
+        data_train, data_validation = data[index_train], data[index_validation]
+        class_train, class_validation = classes[index_train], classes[index_validation]
+        names_train, names_validation = img_names[index_train], img_names[index_validation]
 
         if not os.path.isfile(folds_path + 'fold' + str(fold) + '/trainNames_fold' + str(fold) + '.txt'):
             names_train_file = open(folds_path + 'fold' + str(fold) + '/trainNames_fold' + str(fold) + '.txt', 'w')
@@ -1673,17 +1674,17 @@ def main():
             names_train_file.close()
 
             names_test_file = open(folds_path + 'fold' + str(fold) + '/testNames_fold' + str(fold) + '.txt', 'w')
-            for f in xrange(len(names_test)):
-                names_test_file.write(names_test[f] + '\n')
+            for f in xrange(len(names_validation)):
+                names_test_file.write(names_validation[f] + '\n')
             names_test_file.close()
 
             print BatchColors.OKGREEN + "File names saved!" + BatchColors.ENDC
 
         # np.save(folds_path+'fold'+str(fold)+'/trainNames_fold'+str(fold)+'.npy', names_train)
-        # np.save(folds_path+'fold'+str(fold)+'/testNames_fold'+str(fold)+'.npy', names_test)
+        # np.save(folds_path+'fold'+str(fold)+'/testNames_fold'+str(fold)+'.npy', names_validation)
 
         print data_train.shape, class_train.shape, names_train.shape
-        print data_test.shape, class_test.shape, names_test.shape
+        print data_validation.shape, class_validation.shape, names_validation.shape
 
         ###################
         epoch_number = 1000  # int(len(data_train)/batch_size) # 1 epoch = images / batch
@@ -1691,16 +1692,18 @@ def main():
         display_step = 50  # math.ceil(int(len(training_classes)/batch_size)*0.01)
         ###################
 
+        # TODO : testar algoritmo com imagens no range [-1,1] ao invés de [0,1]
+        # https://github.com/ry/tensorflow-resnet/blob/master/image_processing.py#L268
         if dynamic_norm is True:
             mean_full, std_full = compute_image_mean(data_train)
             normalize_images(data_train, mean_full, std_full)
-            normalize_images(data_test, mean_full, std_full)
+            normalize_images(data_validation, mean_full, std_full)
             if 'testing' in process:
                 print 'normalizing'
                 normalize_images(test_data, mean_full, std_full)
         else:
             normalize_images(data_train, IMAGENET_MEAN_BGR, std_full=None)
-            normalize_images(data_test, IMAGENET_MEAN_BGR, std_full=None)
+            normalize_images(data_validation, IMAGENET_MEAN_BGR, std_full=None)
             if 'testing' in process:
                 normalize_images(test_data, IMAGENET_MEAN_BGR, std_full=None)
 
@@ -1734,17 +1737,21 @@ def main():
         elif net_type == 'resnet152':
             features, logits = resnet(x, is_training, weight_decay, input_image_size, num_blocks=[3, 8, 36, 3])
         elif net_type == 'densenet121':
+            blocks = [6, 12, 24, 16]
             features, logits = densenet(x, is_training, weight_decay, input_image_size, reduction=0.5, drop_rate=0.0,
-                                        growth_rate=32, num_blocks=[6, 12, 24, 16])
+                                        growth_rate=32, first_layer_num_neurons=64, num_blocks=blocks)
         elif net_type == 'densenet169':
+            blocks = [6, 12, 32, 32]
             features, logits = densenet(x, is_training, weight_decay, input_image_size, reduction=0.5, drop_rate=0.0,
-                                        growth_rate=32, num_blocks=[6, 12, 32, 32])
+                                        growth_rate=32, first_layer_num_neurons=64, num_blocks=blocks)
         elif net_type == 'densenet201':
+            blocks = [6, 12, 48, 32]
             features, logits = densenet(x, is_training, weight_decay, input_image_size, reduction=0.5, drop_rate=0.0,
-                                        growth_rate=32, num_blocks=[6, 12, 48, 32])
+                                        growth_rate=32, first_layer_num_neurons=64, num_blocks=blocks)
         elif net_type == 'densenet161':
+            blocks = [6, 12, 36, 24]
             features, logits = densenet(x, is_training, weight_decay, input_image_size, reduction=0.5, drop_rate=0.0,
-                                        growth_rate=48, num_blocks=[6, 12, 36, 24])
+                                        growth_rate=48, first_layer_num_neurons=96, num_blocks=blocks)
         else:
             print BatchColors.FAIL + "Error: Cannot find identify network type: " + net_type + BatchColors.ENDC
             return
@@ -1770,7 +1777,7 @@ def main():
                                      'inception')]
                 elif net_type == 'resnet50' or net_type == 'resnet101' or net_type == 'resnet152':
                     var_list1 = [k for k in tf.all_variables() if k.name.startswith('scale')]
-                elif net_type == 'densenet121':  # or net_type == 'resnet101' or net_type == 'resnet152':
+                elif 'densenet' in net_type:
                     var_list1 = [k for k in tf.all_variables() if k.name.startswith('dense')]
                 var_list2 = [k for k in tf.all_variables() if k.name.startswith('init_')]  # ['init_softmax']
 
@@ -1824,7 +1831,7 @@ def main():
                 load_npy(sess, models_path, ignore_params=ignored)
             elif 't7' in models_path:
                 print BatchColors.OKGREEN + "Loading T7 model from " + models_path + BatchColors.ENDC
-                load_t7(sess, models_path, tf.all_variables(), num_blocks=[6, 12, 24, 16])
+                load_t7(sess, models_path, tf.all_variables(), num_blocks=blocks)
             elif 'ckpt' in models_path:
                 print BatchColors.OKGREEN + "Loading CKPT model from " + models_path + BatchColors.ENDC
                 saver_restore.restore(sess, models_path)
@@ -1832,7 +1839,7 @@ def main():
                 print BatchColors.OKGREEN + "Loading final model from " + models_path + 'fold' + str(
                     fold) + '/model_final' + BatchColors.ENDC
                 saver_restore.restore(sess, models_path + 'fold' + str(fold) + '/model_final')
-            # saver_restore.restore(sess, models_path+'fold'+str(fold)+'/model-20000')
+                # saver_restore.restore(sess, models_path+'fold'+str(fold)+'/model-20000')
             else:
                 print BatchColors.FAIL + "Error: Cannot load model: " + models_path + BatchColors.ENDC
                 # return
@@ -1896,8 +1903,8 @@ def main():
                     if step != 0 and step % val_inteval == 0:
                         # Test
                         saver.save(sess, output_path + 'fold' + str(fold) + '/model', global_step=step)
-                        test(sess, data_test, class_test, n_input_data, batch_size, x, y, keep_prob, is_training, pred,
-                             acc_mean, step)
+                        test(sess, data_validation, class_validation, n_input_data, batch_size, x, y, keep_prob,
+                             is_training, pred, acc_mean, step)
 
                     if min(it * batch_size + batch_size, len(data_train)) == len(data_train) or len(
                             data_train) == it * batch_size + batch_size:
@@ -1911,19 +1918,18 @@ def main():
 
                 # Test: Final
                 saver.save(sess, output_path + 'fold' + str(fold) + '/model_final')
-                test(sess, data_test, class_test, n_input_data, batch_size, x, y, keep_prob, is_training, pred,
-                     acc_mean,
-                     step)
+                test(sess, data_validation, class_validation, n_input_data, batch_size, x, y, keep_prob, is_training,
+                     pred, acc_mean, step)
 
             elif process == 'feature_extraction':
 
-                main_feature_extraction(batch_size, class_test, class_train, data_test, data_train, features, fold,
-                                        is_training, keep_prob, n_input_data, names_test, names_train, output_path,
-                                        sess, test_index, train_index, x, y)
+                main_feature_extraction(batch_size, class_validation, class_train, data_validation, data_train,
+                                        features, fold, is_training, keep_prob, n_input_data, names_validation,
+                                        names_train, output_path, sess, index_validation, index_train, x, y)
 
             elif process == 'cnn_ranking':
-                all_logits = generate_ranking(batch_size, class_test, data_test, is_training, keep_prob, logits,
-                                              n_input_data, names_test, sess, x, y)
+                all_logits = generate_ranking(batch_size, class_validation, data_validation, is_training, keep_prob,
+                                              logits, n_input_data, names_validation, sess, x, y)
 
             elif process == 'testing_fold':
                 all_logits = fold_ranking(sess, x, y, keep_prob, is_training, n_input_data, logits, batch_size,
@@ -1953,11 +1959,11 @@ def main():
                     for k in [50, 100, 250, 480]:
                         print apk(relevant, relevance_list_name, k=k)
 
-                    print 'writing to file... 1.1'
+                    '''print 'writing to file... 1.1'
                     out_file = open(output_path + 'ME17MST_DIRSM_MultiBrasil_run1.1.txt', 'w')
                     for i in xrange(len(relevance_list_name)):
                         out_file.write(relevance_list_name[i] + "\n")
-                    out_file.close()
+                    out_file.close()'''
 
             elif process == 'testing':
                 generate_results(sess, x, y, keep_prob, is_training, logits, n_input_data, batch_size, test_data,

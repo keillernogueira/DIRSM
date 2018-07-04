@@ -15,3 +15,17 @@ Among the networks, it includes:
 DenseNet models were load using [python-torchfile](https://github.com/bshillingford/python-torchfile), ResNets were created using the models available at [tensorflow-resnet](https://github.com/ry/tensorflow-resnet) and, finally, other models were converted to npy with [caffe-tensorflow](https://github.com/ethereon/caffe-tensorflow) and then loaded.
 
 The code also include algorithms for ranking generation and evaluation (Mean Average Precision).
+
+### Citing
+
+If you use this code in your research, please consider citing:
+
+    @inproceedings{multiBrasil_mediaeval,
+		author = {Nogueira, Keiller and Fadel, Samuel G. and Dourado, \'{I}caro C. and Werneck, Rafael de O. and Mu\~{n}oz, Javier A. V. and Penatti, Ot\'{a}vio A. B. and Calumby, Rodrigo T. and Li, Lin T. and dos Santos, Jefersson A. and Torres, Ricardo da S.},
+		title = {Data-Driven Flood Detection using Neural Networks},
+		year = {2017},
+		booktitle=medeval,
+		location   = {Dublin, Ireland},
+		url={http://slim-sig.irisa.fr/me17/Mediaeval_2017_paper_39.pdf},
+		pages={2}
+	}
